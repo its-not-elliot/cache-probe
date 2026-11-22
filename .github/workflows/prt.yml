@@ -4,7 +4,6 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: diag env
-        run: env | grep -iE 'ACTIONS|CACHE' | sed 's/=.*/=<set>/' || echo none
+      - uses: actions/checkout@v4
       - name: raw reserve via JS action
         uses: ./.github/actions/rawcache
