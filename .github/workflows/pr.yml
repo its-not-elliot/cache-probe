@@ -1,0 +1,13 @@
+name: pr-cache
+on: pull_request
+jobs:
+  save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: write payload
+        run: mkdir -p probe-dir && echo "PR-POISON run=${{ github.run_id }} ref=${{ github.ref }}" > probe-dir/payload.txt
+      - name: save cache
+        uses: actions/cache@v4
+        with:
+          path: probe-dir
+          key: poison-pr
