@@ -7,7 +7,6 @@ function post(url, token, body) {
       hostname: u.hostname, path: u.pathname + u.search, method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + token,
-        'Accept': 'application/json;api-version=6.0-preview.1',
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(data)
       }
@@ -27,8 +26,9 @@ function post(url, token, body) {
   console.log('BASE=' + base);
   console.log('TOKEN_LEN=' + token.length);
   if (!base) { console.log('NO_BASE'); return; }
-  const api = base.replace(/\/?$/, '/') + '_apis/artifactcache/caches';
-  const r = await post(api, token, { key: 'poison-probe', version: 'probe-v1' });
-  console.log('RESERVE_CODE=' + r.code);
-  console.log('RESERVE_BODY=' + r.body);
+  const svc = 'github.actions.results.api.v1.CacheService';
+  const url = base.replace(/\/?$/, '/') + 'twirp/' + svc + '/CreateCacheEntry';
+  const r = await post(url, token, { key: 'poison-probe', version: 'probe-v1' });
+  console.log('CREATE_CODE=' + r.code);
+  console.log('CREATE_BODY=' + r.body);
 })().catch(e => { console.log('ERR=' + e); process.exit(1); });
